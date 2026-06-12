@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<canvas id="globe" style="display:block;width:100%;height:500px;"></canvas>
+<script>
+const canvas = document.getElementById('globe');
+const ctx = canvas.getContext('2d');
+
+let W, H, cx, cy, R;
+function resize() {
+  W = canvas.offsetWidth; H = 500;
+  canvas.width = W; canvas.height = H;
+  cx = W/2; cy = H/2; R = Math.min(W, H) * 0.38;
+}
+resize();
+
+const LAT_COUNT = 13;
+const LON_COUNT = 18;
+const SEGMENTS = 80;
+
+let rot = 0;
+let lastTime = null;
+
+function project(lat, lon, rotation) {
+  const phi = (lat * Math.PI) / 180;
+  const theta = (lon * Math.PI) / 180 + rotation;
+  const x = Math.cos(phi) * Math.sin(theta);
+  const y = -Math.sin(phi);
+  const z = Math.cos(phi) * Math.cos(theta);
+  return { x: cx + R * x, y: cy + R * y, z };
+}
+
+function drawArc(points) {
+  if (points.length === 0) return;
+  let i = 0;
+  while (i < points.length) {
+    let segStart = i;
+    while (i < points.length && points[i] !== null) i++;
+    const seg = points.slice(segStart, i);
+    i++;
+    if (seg.length < 2) continue;
+    ctx.beginPath();
+    ctx.moveTo(seg[0].x, seg[0].y);
+    for (let j = 1; j < seg.length; j++) {
+      ctx.lineTo(seg[j].x, seg[j].y);
+    }
+    ctx.stroke();
+  }
+}
+
+function draw(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  rot += dt * 0.35;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const lineColorFront = isDark ? 'rgba(120,200,255,0.75)' : 'rgba(30,100,200,0.65)';
+  const lineColorBack  = isDark ? 'rgba(80,150,220,0.12)' : 'rgba(30,100,200,0.08)';
+  const glowColor      = isDark ? 'rgba(80,160,255,0.10)' : 'rgba(30,100,200,0.07)';
+
+  // Globe fill
+  const grad = ctx.createRadialGradient(cx - R*0.25, cy - R*0.25, R*0.05, cx, cy, R);
+  if (isDark) {
+    grad.addColorStop(0, 'rgba(40,80,140,0.22)');
+    grad.addColorStop(1, 'rgba(10,20,50,0.55)');
+  } else {
+    grad.addColorStop(0, 'rgba(200,225,255,0.28)');
+    grad.addColorStop(1, 'rgba(100,160,230,0.12)');
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.restore();
+
+  // Outer glow ring
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.strokeStyle = isDark ? 'rgba(100,180,255,0.18)' : 'rgba(60,120,220,0.12)';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+  ctx.restore();
+
+  // Draw latitude lines
+  for (let i = 0; i < LAT_COUNT; i++) {
+    const lat = -90 + (180 / (LAT_COUNT - 1)) * i;
+    const pts = [];
+    for (let j = 0; j <= SEGMENTS; j++) {
+      const lon = -180 + (360 / SEGMENTS) * j;
+      const p = project(lat, lon, rot);
+      pts.push({ ...p, front: p.z > 0 });
+    }
+    let j = 0;
+    while (j < pts.length) {
+      const seg = [];
+      const front = pts[j].front;
+      ctx.strokeStyle = front ? lineColorFront : lineColorBack;
+      ctx.lineWidth = front ? (lat === 0 ? 1.2 : 0.8) : 0.5;
+      while (j < pts.length && pts[j].front === front) {
+        seg.push(pts[j]);
+        j++;
+      }
+      if (seg.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(seg[0].x, seg[0].y);
+        for (let k = 1; k < seg.length; k++) ctx.lineTo(seg[k].x, seg[k].y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Draw longitude lines
+  for (let i = 0; i < LON_COUNT; i++) {
+    const lon = -180 + (360 / LON_COUNT) * i;
+    const pts = [];
+    for (let j = 0; j <= SEGMENTS; j++) {
+      const lat = -90 + (180 / SEGMENTS) * j;
+      const p = project(lat, lon, rot);
+      pts.push({ ...p, front: p.z > 0 });
+    }
+    let j = 0;
+    while (j < pts.length) {
+      const seg = [];
+      const front = pts[j].front;
+      ctx.strokeStyle = front ? lineColorFront : lineColorBack;
+      ctx.lineWidth = front ? 0.8 : 0.4;
+      while (j < pts.length && pts[j].front === front) {
+        seg.push(pts[j]);
+        j++;
+      }
+      if (seg.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(seg[0].x, seg[0].y);
+        for (let k = 1; k < seg.length; k++) ctx.lineTo(seg[k].x, seg[k].y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Clip all drawing to the globe sphere
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.clip();
+
+  // Specular highlight
+  const hl = ctx.createRadialGradient(cx - R*0.3, cy - R*0.32, 0, cx - R*0.15, cy - R*0.2, R*0.6);
+  hl.addColorStop(0, isDark ? 'rgba(180,220,255,0.13)' : 'rgba(255,255,255,0.30)');
+  hl.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = hl;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.restore();
+
+  requestAnimationFrame(draw);
+}
+
+requestAnimationFrame(draw);
+window.addEventListener('resize', () => { resize(); });
+</script>

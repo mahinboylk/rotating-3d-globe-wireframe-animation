@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rotating 3D Globe</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+        }
+        
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div class="info">Latitude &amp; Longitude Globe • Continuous Rotation</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script>
+        // Scene setup
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        
+        // Camera
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.z = 5.5;
+        
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            alpha: true 
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xaaaaaa, 0.6);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        directionalLight.position.set(5, 3, 5);
+        scene.add(directionalLight);
+        
+        const pointLight = new THREE.PointLight(0x88ccff, 0.8, 100);
+        pointLight.position.set(-5, 2, -4);
+        scene.add(pointLight);
+        
+        // Globe group
+        const globe = new THREE.Group();
+        scene.add(globe);
+        
+        const radius = 2;
+        const lineMaterial = new THREE.LineBasicMaterial({
+            color: 0x44ccff,
+            transparent: true,
+            opacity: 0.85
+        });
+        
+        // Base sphere (subtle ocean/base color)
+        const sphereGeometry = new THREE.SphereGeometry(radius, 64, 64);
+        const sphereMaterial = new THREE.MeshPhongMaterial({
+            color: 0x112244,
+            shininess: 8,
+            specular: 0x222222,
+            transparent: true,
+            opacity: 0.75,
+            side: THREE.FrontSide
+        });
+        const baseSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        globe.add(baseSphere);
+        
+        // Generate Latitude lines (parallels)
+        const latSegments = 48;
+        const numLatitudes = 13;
+        
+        for (let i = 0; i < numLatitudes; i++) {
+            const phi = -85 + (170 * i) / (numLatitudes - 1); // Avoid exact poles
+            const latRad = phi * Math.PI / 180;
+            const y = radius * Math.sin(latRad);
+            const circleRadius = radius * Math.cos(latRad);
+            
+            if (circleRadius < 0.05) continue;
+            
+            const points = [];
+            for (let j = 0; j <= latSegments; j++) {
+                const theta = (j / latSegments) * Math.PI * 2;
+                const x = circleRadius * Math.cos(theta);
+                const z = circleRadius * Math.sin(theta);
+                points.push(new THREE.Vector3(x, y, z));
+            }
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const latitudeLine = new THREE.Line(geometry, lineMaterial);
+            globe.add(latitudeLine);
+        }
+        
+        // Generate Longitude lines (meridians)
+        const lonSegments = 64;
+        const numLongitudes = 24; // every 15 degrees
+        
+        for (let i = 0; i < numLongitudes; i++) {
+            const lon = (i * 360 / numLongitudes) * Math.PI / 180;
+            
+            const points = [];
+            for (let j = 0; j <= lonSegments; j++) {
+                const phi = (j / lonSegments) * Math.PI - Math.PI / 2; // from -90° to 90°
+                const x = radius * Math.cos(phi) * Math.cos(lon);
+                const y = radius * Math.sin(phi);
+                const z = radius * Math.cos(phi) * Math.sin(lon);
+                points.push(new THREE.Vector3(x, y, z));
+            }
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const longitudeLine = new THREE.Line(geometry, lineMaterial);
+            globe.add(longitudeLine);
+        }
+        
+        // Highlight equator and prime meridian
+        const highlightMaterial = new THREE.LineBasicMaterial({
+            color: 0x88ffff,
+            transparent: true,
+            opacity: 1
+        });
+        
+        // Equator
+        const equatorPoints = [];
+        for (let j = 0; j <= 64; j++) {
+            const theta = (j / 64) * Math.PI * 2;
+            equatorPoints.push(new THREE.Vector3(
+                radius * Math.cos(theta),
+                0,
+                radius * Math.sin(theta)
+            ));
+        }
+        const equatorGeo = new THREE.BufferGeometry().setFromPoints(equatorPoints);
+        const equatorLine = new THREE.Line(equatorGeo, highlightMaterial);
+        globe.add(equatorLine);
+        
+        // Prime meridian
+        const primePoints = [];
+        for (let j = 0; j <= 64; j++) {
+            const phi = (j / 64) * Math.PI - Math.PI / 2;
+            primePoints.push(new THREE.Vector3(
+                radius * Math.cos(phi),
+                radius * Math.sin(phi),
+                0
+            ));
+        }
+        const primeGeo = new THREE.BufferGeometry().setFromPoints(primePoints);
+        const primeLine = new THREE.Line(primeGeo, highlightMaterial);
+        globe.add(primeLine);
+        
+        // Animation variables
+        let rotationSpeed = 0.0035;
+        
+        // Resize handler
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        window.addEventListener('resize', onWindowResize);
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Smooth continuous rotation around Y axis (Earth's axis)
+            globe.rotation.y += rotationSpeed;
+            
+            // Very subtle tilt animation for depth
+            globe.rotation.x = Math.sin(Date.now() * 0.0001) * 0.08;
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Start animation
+        animate();
+        
+        // Optional: Pause rotation on click (for inspection)
+        let isPaused = false;
+        window.addEventListener('click', () => {
+            isPaused = !isPaused;
+            rotationSpeed = isPaused ? 0 : 0.0035;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rotating 3D Globe</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a15 100%);
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="globeCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('globeCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- Configuration ---
+const CONFIG = {
+  radius: 220,
+  longitudeLines: 12,      // number of meridian lines
+  latitudeLines: 9,        // number of parallel lines (excluding poles)
+  rotationSpeed: 0.003,    // radians per frame
+  segmentCount: 60,        // smoothness of each line
+  tiltAngle: 0.4,          // tilt of the globe axis (radians)
+  perspectiveStrength: 0,  // 0 = orthographic, higher = more perspective
+  frontColor: 'rgba(100, 200, 255, 0.8)',
+  backColor: 'rgba(100, 200, 255, 0.15)',
+  glowColor: 'rgba(60, 140, 220, 0.08)',
+};
+
+let rotation = 0;
+
+// --- Resize canvas to fill the window ---
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- 3D to 2D projection ---
+// Rotate around Y-axis (longitude), then tilt around X-axis
+function project(lat, lon, rot) {
+  const r = CONFIG.radius;
+
+  // Spherical to Cartesian
+  const x3d = r * Math.cos(lat) * Math.cos(lon + rot);
+  const y3d = r * Math.sin(lat);
+  const z3d = r * Math.cos(lat) * Math.sin(lon + rot);
+
+  // Apply tilt around X-axis
+  const cosTilt = Math.cos(CONFIG.tiltAngle);
+  const sinTilt = Math.sin(CONFIG.tiltAngle);
+  const yTilted = y3d * cosTilt - z3d * sinTilt;
+  const zTilted = y3d * sinTilt + z3d * cosTilt;
+
+  // Orthographic projection
+  const screenX = canvas.width / 2 + x3d;
+  const screenY = canvas.height / 2 - yTilted;
+
+  return { x: screenX, y: screenY, z: zTilted };
+}
+
+// --- Draw a line strip with depth-based opacity ---
+function drawLineStrip(points, baseColor, backColor) {
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+
+    // Use z to determine if segment is on front or back
+    const avgZ = (p1.z + p2.z) / 2;
+    const isFront = avgZ > 0;
+
+    ctx.beginPath();
+    ctx.strokeStyle = isFront ? baseColor : backColor;
+    ctx.lineWidth = isFront ? 1.8 : 1.0;
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+  }
+}
+
+// --- Main render function ---
+function render() {
+  // Clear canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw a subtle glow behind the globe
+  const gradient = ctx.createRadialGradient(
+    canvas.width / 2, canvas.height / 2, CONFIG.radius * 0.5,
+    canvas.width / 2, canvas.height / 2, CONFIG.radius * 1.5
+  );
+  gradient.addColorStop(0, CONFIG.glowColor);
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw the globe outline
+  ctx.beginPath();
+  ctx.arc(canvas.width / 2, canvas.height / 2, CONFIG.radius, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // --- Draw latitude lines (parallels) ---
+  for (let i = 1; i <= CONFIG.latitudeLines; i++) {
+    const lat = (i / (CONFIG.latitudeLines + 1)) * Math.PI - Math.PI / 2;
+    const points = [];
+
+    for (let j = 0; j <= CONFIG.segmentCount; j++) {
+      const lon = (j / CONFIG.segmentCount) * Math.PI * 2;
+      points.push(project(lat, lon, rotation));
+    }
+
+    drawLineStrip(points, CONFIG.frontColor, CONFIG.backColor);
+  }
+
+  // --- Draw longitude lines (meridians) ---
+  for (let i = 0; i < CONFIG.longitudeLines; i++) {
+    const lon = (i / CONFIG.longitudeLines) * Math.PI * 2;
+    const points = [];
+
+    for (let j = 0; j <= CONFIG.segmentCount; j++) {
+      const lat = (j / CONFIG.segmentCount) * Math.PI - Math.PI / 2;
+      points.push(project(lat, lon, rotation));
+    }
+
+    drawLineStrip(points, CONFIG.frontColor, CONFIG.backColor);
+  }
+
+  // Update rotation
+  rotation += CONFIG.rotationSpeed;
+  if (rotation >= Math.PI * 2) rotation -= Math.PI * 2;
+
+  requestAnimationFrame(render);
+}
+
+// Start the animation
+render();
+</script>
+</body>
+</html>

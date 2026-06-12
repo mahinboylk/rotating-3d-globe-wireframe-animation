@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Rotating Globe</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f23 100%);
+            overflow: hidden;
+        }
+
+        .globe-container {
+            width: 400px;
+            height: 400px;
+            perspective: 1000px;
+        }
+
+        .globe {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: rotateGlobe 20s linear infinite;
+        }
+
+        .sphere {
+            width: 300px;
+            height: 300px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transform-style: preserve-3d;
+        }
+
+        /* Latitude lines (horizontal circles) */
+        .latitude {
+            position: absolute;
+            border: 1.5px solid rgba(100, 200, 255, 0.6);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform-style: preserve-3d;
+            box-shadow: 0 0 8px rgba(100, 200, 255, 0.3);
+        }
+
+        .lat-0 {
+            width: 300px;
+            height: 300px;
+            transform: translate(-50%, -50%) rotateX(90deg);
+        }
+
+        .lat-15 {
+            width: 290px;
+            height: 290px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(40px);
+        }
+
+        .lat-15-s {
+            width: 290px;
+            height: 290px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(-40px);
+        }
+
+        .lat-30 {
+            width: 260px;
+            height: 260px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(75px);
+        }
+
+        .lat-30-s {
+            width: 260px;
+            height: 260px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(-75px);
+        }
+
+        .lat-45 {
+            width: 212px;
+            height: 212px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(106px);
+        }
+
+        .lat-45-s {
+            width: 212px;
+            height: 212px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(-106px);
+        }
+
+        .lat-60 {
+            width: 150px;
+            height: 150px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(130px);
+        }
+
+        .lat-60-s {
+            width: 150px;
+            height: 150px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(-130px);
+        }
+
+        .lat-75 {
+            width: 78px;
+            height: 78px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(145px);
+        }
+
+        .lat-75-s {
+            width: 78px;
+            height: 78px;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(-145px);
+        }
+
+        .lat-90 {
+            width: 0;
+            height: 0;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(150px);
+        }
+
+        .lat-90-s {
+            width: 0;
+            height: 0;
+            transform: translate(-50%, -50%) rotateX(90deg) translateZ(-150px);
+        }
+
+        /* Longitude lines (vertical circles) */
+        .longitude {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border: 1.5px solid rgba(100, 200, 255, 0.5);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transform-style: preserve-3d;
+            box-shadow: 0 0 6px rgba(100, 200, 255, 0.2);
+        }
+
+        .lon-0 {
+            transform: translate(-50%, -50%) rotateY(0deg);
+        }
+
+        .lon-30 {
+            transform: translate(-50%, -50%) rotateY(30deg);
+        }
+
+        .lon-60 {
+            transform: translate(-50%, -50%) rotateY(60deg);
+        }
+
+        .lon-90 {
+            transform: translate(-50%, -50%) rotateY(90deg);
+        }
+
+        .lon-120 {
+            transform: translate(-50%, -50%) rotateY(120deg);
+        }
+
+        .lon-150 {
+            transform: translate(-50%, -50%) rotateY(150deg);
+        }
+
+        /* Add a subtle glow effect */
+        .globe::before {
+            content: '';
+            position: absolute;
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle, rgba(100, 200, 255, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        /* Stars background */
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.8;
+            animation: twinkle 3s ease-in-out infinite;
+        }
+
+        @keyframes rotateGlobe {
+            from {
+                transform: rotateY(0deg);
+            }
+            to {
+                transform: rotateY(360deg);
+            }
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <div class="stars" id="stars"></div>
+    <div class="globe-container">
+        <div class="globe">
+            <div class="sphere">
+                <!-- Latitude lines -->
+                <div class="latitude lat-0"></div>
+                <div class="latitude lat-15"></div>
+                <div class="latitude lat-15-s"></div>
+                <div class="latitude lat-30"></div>
+                <div class="latitude lat-30-s"></div>
+                <div class="latitude lat-45"></div>
+                <div class="latitude lat-45-s"></div>
+                <div class="latitude lat-60"></div>
+                <div class="latitude lat-60-s"></div>
+                <div class="latitude lat-75"></div>
+                <div class="latitude lat-75-s"></div>
+                <div class="latitude lat-90"></div>
+                <div class="latitude lat-90-s"></div>
+
+                <!-- Longitude lines -->
+                <div class="longitude lon-0"></div>
+                <div class="longitude lon-30"></div>
+                <div class="longitude lon-60"></div>
+                <div class="longitude lon-90"></div>
+                <div class="longitude lon-120"></div>
+                <div class="longitude lon-150"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generate random stars
+        const starsContainer = document.getElementById('stars');
+        const starCount = 200;
+
+        for (let i = 0; i < starCount; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            star.style.width = Math.random() * 2 + 1 + 'px';
+            star.style.height = star.style.width;
+            starsContainer.appendChild(star);
+        }
+    </script>
+</body>
+</html>

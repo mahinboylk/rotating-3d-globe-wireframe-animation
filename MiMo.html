@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wireframe Globe</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #070710;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        canvas { display: block; }
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+            opacity: 0.02;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="globe"></canvas>
+    <script>
+    (() => {
+        const canvas = document.getElementById('globe');
+        const ctx = canvas.getContext('2d');
+        let W, H, R;
+
+        function resize() {
+            W = canvas.width = innerWidth;
+            H = canvas.height = innerHeight;
+            R = Math.min(W, H) * 0.32;
+        }
+        resize();
+        addEventListener('resize', resize);
+
+        /* ── Globe configuration ── */
+        const FOCAL     = 900;   // perspective distance
+        const MERIDIANS = 12;    // longitude great circles
+        const PARALLELS = 9;    // latitude circles (includes equator at p = 5)
+        const SEGMENTS  = 120;  // points per line
+        const SPEED     = 0.005; // radians per frame
+        const TILT      = 0.35;  // axial tilt (~20°)
+
+        let spin = 0;
+
+        /* ── 3D pipeline: tilt → rotate → project ── */
+        function transform(x, y, z) {
+            // Axial tilt around Z
+            const ct = Math.cos(TILT), st = Math.sin(TILT);
+            const x1 = x * ct - y * st;
+            const y1 = x * st + y * ct;
+            const z1 = z;
+
+            // Spin around Y
+            const cs = Math.cos(spin), sn = Math.sin(spin);
+            const x2 = x1 * cs + z1 * sn;
+            const y2 = y1;
+            const z2 = -x1 * sn + z1 * cs;
+
+            // Perspective
+            const scale = FOCAL / (FOCAL + z2);
+            return [x2 * scale, y2 * scale, z2];
+        }
+
+        /* ── Depth → opacity (quadratic falloff) ── */
+        function depthAlpha(z) {
+            const t = Math.max(0, Math.min(1, 0.5 + z / (2 * R)));
+            return 0.04 + 0.96 * t * t;
+        }
+
+        /* ── Draw a polyline with per-segment depth shading ── */
+        function drawPolyline(points, lineWidth) {
+            ctx.lineWidth = lineWidth;
+            for (let i = 0; i < points.length - 1; i++) {
+                const [ax, ay, az] = points[i];
+                const [bx, by, bz] = points[i + 1];
+                const a = depthAlpha((az + bz) * 0.5);
+                if (a < 0.045) continue;         // cull nearly-invisible segments
+                ctx.strokeStyle = `rgba(100, 220, 255, ${a.toFixed(3)})`;
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+            }
+        }
+
+        /* ── Main render loop ── */
+        function render() {
+            // Solid background
+            ctx.fillStyle = '#070710';
+            ctx.fillRect(0, 0, W, H);
+
+            // Radial ambient glow behind the globe
+            const cx = W / 2, cy = H / 2;
+            const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 2.2);
+            glow.addColorStop(0, 'rgba(0, 50, 100, 0.10)');
+            glow.addColorStop(0.5, 'rgba(0, 25, 60, 0.03)');
+            glow.addColorStop(1, 'transparent');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, W, H);
+
+            // Prepare canvas for globe drawing
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.lineCap = 'round';
+            ctx.shadowColor = 'rgba(80, 200, 255, 0.3)';
+            // Subtle breathing glow
+            ctx.shadowBlur = 10 + Math.sin(performance.now() * 0.0008) * 3;
+
+            /* Meridians — longitude great circles */
+            for (let m = 0; m < MERIDIANS; m++) {
+                const lon = (m / MERIDIANS) * Math.PI;
+                const pts = [];
+                for (let i = 0; i <= SEGMENTS; i++) {
+                    const t = (i / SEGMENTS) * Math.PI * 2;
+                    pts.push(transform(
+                        R * Math.sin(t) * Math.cos(lon),
+                        R * Math.cos(t),
+                        R * Math.sin(t) * Math.sin(lon)
+                    ));
+                }
+                drawPolyline(pts, 0.8);
+            }
+
+            /* Parallels — latitude circles */
+            for (let p = 1; p <= PARALLELS; p++) {
+                const lat  = -Math.PI / 2 + (p / (PARALLELS + 1)) * Math.PI;
+                const cosR = R * Math.cos(lat);
+                const sinY = R * Math.sin(lat);
+                const pts  = [];
+                for (let i = 0; i <= SEGMENTS; i++) {
+                    const lon = (i / SEGMENTS) * Math.PI * 2;
+                    pts.push(transform(
+                        cosR * Math.cos(lon),
+                        sinY,
+                        cosR * Math.sin(lon)
+                    ));
+                }
+                drawPolyline(pts, p === 5 ? 1.3 : 0.8); // equator gets emphasis
+            }
+
+            ctx.restore();
+
+            spin += SPEED;
+            requestAnimationFrame(render);
+        }
+
+        render();
+    })();
+    </script>
+</body>
+</html>
